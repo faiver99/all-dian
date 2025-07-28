@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Prueba DIAN – Nivel Técnico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony (Light Slate/Amber, Dark Slate Text, Teal Accent) -->
+    <!-- Application Structure Plan: A multi-step quiz-style SPA. The user progresses linearly through a welcome screen, three test sections (Functional, Behavioral, Integrity), and a final interactive results page. This structure was chosen because it directly mimics the real-world exam process, providing a familiar, task-oriented, and intuitive user flow for applicants preparing for the test. History is now saved to localStorage and displayed on the welcome screen. -->
+    <!-- Visualization & Content Choices: Report Info: Functional questions -> Goal: Assess knowledge -> Viz: Score display (Donut Chart) & answer review list -> Interaction: Click-to-answer quiz -> Justification: Provides clear, quantitative feedback. | Report Info: Behavioral/Integrity statements -> Goal: Profile user's alignment with DIAN values -> Viz: Radar Chart (Chart.js) -> Interaction: Likert-scale selection -> Justification: Visually represents strengths across multiple abstract competencies, which is more insightful than a simple score. Library/Method: Chart.js for all visualizations. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .quiz-option {
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .quiz-option.selected {
+            background-color: #ccfbf1; /* teal-100 */
+            border-color: #14b8a6; /* teal-500 */
+        }
+        .quiz-option.correct {
+            background-color: #dcfce7; /* green-100 */
+            border-color: #22c55e; /* green-500 */
+            color: #15803d; /* green-700 */
+        }
+        .quiz-option.incorrect {
+            background-color: #fee2e2; /* red-100 */
+            border-color: #ef4444; /* red-500 */
+            color: #b91c1c; /* red-700 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="app" class="container mx-auto p-4 md:p-8 max-w-4xl">
+
+        <!-- Welcome Screen -->
+        <div id="welcome-screen">
+            <div class="bg-white p-8 rounded-xl shadow-lg text-center">
+                <h1 class="text-3xl md:text-4xl font-bold text-teal-700 mb-4">Simulador de Prueba Escrita DIAN</h1>
+                <p class="text-lg text-slate-600 mb-2">Nivel Técnico – Proceso 2667</p>
+                <p class="mb-6">Estás a punto de iniciar una simulación de la prueba escrita. La prueba consta de 3 partes y un total de 138 preguntas. Responde cada pregunta para recibir un análisis completo de tu desempeño al final.</p>
+                
+                <!-- History Section -->
+                <div id="history-section" class="hidden mt-8 border-t pt-6">
+                    <h2 class="text-xl font-bold mb-4">Historial de Intentos</h2>
+                    <div id="history-list" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        <!-- History items will be injected here -->
+                    </div>
+                    <button id="clear-history-btn" class="mt-4 text-sm text-red-500 hover:text-red-700">Borrar historial</button>
+                </div>
+
+                <button id="start-btn" class="mt-8 bg-teal-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-teal-700 transition-colors w-full md:w-auto">
+                    Iniciar Simulación
+                </button>
+            </div>
+        </div>
+
+        <!-- Quiz Screen -->
+        <div id="quiz-screen" class="hidden">
+            <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg">
+                <div id="quiz-header" class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 id="quiz-title" class="text-xl font-bold text-teal-700"></h2>
+                        <span id="quiz-progress-text" class="text-sm font-medium text-slate-500"></span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5">
+                        <div id="quiz-progress-bar" class="bg-teal-500 h-2.5 rounded-full transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div id="question-container">
+                    <!-- Question content will be injected here by JS -->
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <button id="next-btn" class="bg-teal-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-teal-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed">Siguiente</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="hidden">
+             <div class="bg-white p-8 rounded-xl shadow-lg text-center">
+                <h1 class="text-3xl md:text-4xl font-bold text-teal-700 mb-4">Resultados de la Simulación</h1>
+                <p class="text-slate-600 mb-8">Aquí tienes un análisis de tu desempeño en la prueba.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <!-- Functional Score -->
+                    <div class="border p-6 rounded-lg">
+                        <h2 class="text-2xl font-bold mb-4">Competencias Funcionales</h2>
+                        <p class="text-slate-500 mb-4">Resultado de la prueba de conocimientos técnicos.</p>
+                        <div class="chart-container">
+                            <canvas id="functional-chart"></canvas>
+                        </div>
+                         <button id="review-btn" class="mt-6 bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors text-sm">Revisar Respuestas</button>
+                    </div>
+                    <!-- Behavioral Profile -->
+                    <div class="border p-6 rounded-lg">
+                        <h2 class="text-2xl font-bold mb-4">Perfil de Competencias</h2>
+                        <p class="text-slate-500 mb-4">Análisis de tus competencias comportamentales y de integridad.</p>
+                         <div class="chart-container">
+                            <canvas id="behavioral-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Answer Review Section -->
+                <div id="review-section" class="hidden mt-10 text-left border-t pt-6">
+                    <h2 class="text-2xl font-bold mb-4 text-center">Revisión de Prueba Funcional</h2>
+                    <div id="review-container" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        <!-- Review content will be injected here -->
+                    </div>
+                </div>
+
+                <button id="restart-btn" class="mt-10 bg-teal-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-teal-700 transition-colors w-full md:w-auto">
+                    Volver al Inicio
+                </button>
+             </div>
+        </div>
+
+    </div>
+
+    <script>
+        const questions = [
+            // --- PARTE I: COMPETENCIAS FUNCIONALES (54) ---
+            { id: 1, type: 'functional', topic: 'Soporte Técnico General', case: 'Un funcionario reporta que su computador portátil no enciende. Al presionar el botón de encendido, no hay luces, ni sonidos, ni actividad en la pantalla. El funcionario asegura que estaba conectado a la corriente.', enunciado: 'Como primer paso lógico en el diagnóstico del problema, ¿qué acción debería realizar?', options: ['Abrir el portátil para revisar la conexión interna de la batería.', 'Verificar que el adaptador de corriente esté bien conectado tanto a la toma eléctrica como al portátil y probar con otro adaptador compatible si es posible.', 'Informar al funcionario que el equipo tiene un daño irreparable y se debe solicitar uno nuevo.'], correct: 1, justification: 'Antes de cualquier diagnóstico invasivo, se deben verificar las conexiones externas y la fuente de poder, que son las causas más comunes y fáciles de solucionar.' },
+            { id: 2, type: 'functional', topic: 'Seguridad Informática', case: 'Recibes una alerta automática del sistema de seguridad que indica que se ha detectado un software malicioso (malware) en el equipo de un funcionario del área de aduanas.', enunciado: 'Siguiendo el protocolo de seguridad informática, ¿cuál es la acción inmediata y más segura que debes tomar?', options: ['Desconectar físicamente el equipo de la red de la DIAN para evitar la propagación del malware a otros sistemas.', 'Llamar al funcionario para pedirle que reinicie su computador, ya que esto suele eliminar los virus.', 'Iniciar una sesión remota en el equipo afectado para intentar eliminar el malware manualmente mientras sigue conectado a la red.'], correct: 0, justification: 'La prioridad es contener la amenaza. Aislar el equipo de la red evita que el malware se propague a otros sistemas críticos de la entidad.' },
+            { id: 3, type: 'functional', topic: 'Ofimática Avanzada', case: 'Tu jefe te entrega un archivo de Excel con 5,000 registros de contribuyentes y te pide un listado de aquellos que presentan inconsistencias, las cuales están marcadas en otra columna con la palabra "REVISAR".', enunciado: 'Para obtener rápidamente la lista de los contribuyentes que requieren revisión, ¿qué herramienta de Excel es la más eficiente?', options: ['Revisar manualmente cada una de las 5,000 filas para encontrar la palabra "REVISAR".', 'Aplicar un filtro a la columna de inconsistencias para que muestre únicamente las filas que contienen el texto "REVISAR".', 'Crear una tabla dinámica, ya que es la herramienta más potente de Excel.'], correct: 1, justification: 'La función de filtro está diseñada específicamente para seleccionar y mostrar rápidamente subconjuntos de datos que cumplen con un criterio específico, siendo la más directa para esta tarea.' },
+            { id: 4, type: 'functional', topic: 'Metodología ITIL', case: 'Un usuario solicita la instalación de un nuevo software de análisis estadístico en su equipo. Esta solicitud no está relacionada con ninguna falla, sino con una nueva necesidad para su trabajo.', enunciado: 'Según la terminología de ITIL, ¿cómo debe ser clasificada esta petición?', options: ['Como un Incidente, porque el usuario no puede trabajar sin el software.', 'Como una Solicitud de Servicio, ya que es una petición estándar de un nuevo recurso.', 'Como un Problema, porque la falta del software es la causa de una futura ineficiencia.'], correct: 1, justification: 'Una Solicitud de Servicio es una petición de un usuario para obtener información, asesoramiento, un cambio estándar o acceso a un servicio de TI. La instalación de software pre-aprobado es un ejemplo clásico.' },
+            { id: 5, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Varios funcionarios de un mismo piso reportan que no pueden acceder a los recursos compartidos en el servidor local, pero sí tienen acceso a internet.', enunciado: '¿Cuál es la causa más probable del problema?', options: ['El proveedor de servicios de internet (ISP) está experimentando una falla general.', 'El switch de red que conecta a los usuarios de ese piso ha perdido la conexión con el servidor local o ha dejado de funcionar.', 'Todos los computadores de los usuarios tienen el mismo virus que bloquea el acceso a la red local.'], correct: 1, justification: 'Si el acceso a internet funciona pero los recursos locales no, el problema reside en la red interna (LAN). El switch es el punto de conexión común para los usuarios de un piso hacia el servidor.' },
+            { id: 6, type: 'functional', topic: 'Infraestructura TIC', case: 'La DIAN planea una actualización tecnológica y se debe decidir entre mantener los servidores en las oficinas locales (On-Premise) o migrarlos a una solución de computación en la nube (Cloud Computing).', enunciado: '¿Cuál es una ventaja clave de la computación en la nube que justificaría la migración para una entidad como la DIAN?', options: ['Permite tener control físico y directo sobre el hardware de los servidores en todo momento.', 'Ofrece escalabilidad para ajustar los recursos de cómputo (capacidad, almacenamiento) según la demanda, pagando solo por lo que se usa.', 'Elimina la necesidad de tener conexiones a internet, ya que todo funciona de manera local.'], correct: 1, justification: 'La escalabilidad elástica es una de las principales ventajas de la nube, permitiendo a las organizaciones adaptarse a picos de demanda (como temporadas de impuestos) sin necesidad de una inversión masiva en hardware.' },
+            { id: 7, type: 'functional', topic: 'Misionalidad de la DIAN', case: 'Durante una tarea de mantenimiento, un técnico observa que un funcionario está utilizando los recursos informáticos de la entidad para gestionar un negocio personal.', enunciado: 'De acuerdo con los principios de uso de recursos públicos y la misionalidad de la entidad, ¿cuál es la acción correcta?', options: ['Ignorar la situación, ya que no es su responsabilidad supervisar el trabajo de otros funcionarios.', 'Recordarle al funcionario de manera informal que los equipos son para uso laboral exclusivo.', 'Documentar la situación y reportarla a través de los canales institucionales correspondientes, como el jefe inmediato o control interno.'], correct: 2, justification: 'El uso indebido de recursos públicos va en contra de los principios éticos de la entidad. El procedimiento correcto es reportar la situación a través de los canales oficiales para que se tomen las medidas adecuadas.' },
+            { id: 8, type: 'functional', topic: 'Razonamiento Analítico', case: 'Se presenta un informe con tres datos: el número total de declaraciones presentadas, el número de declaraciones con saldo a favor y el número de declaraciones con pago. Se necesita saber cuántas declaraciones no generaron ni saldo a favor ni pago.', enunciado: '¿Qué operación lógica se debe realizar?', options: ['Sumar las declaraciones con saldo a favor y las declaraciones con pago.', 'Restar al total de declaraciones la suma de las declaraciones con saldo a favor y las que tuvieron pago.', 'Promediar el número de declaraciones con saldo a favor y las que tuvieron pago.'], correct: 1, justification: 'Para encontrar el subconjunto restante, se debe restar del universo total la suma de los otros subconjuntos conocidos.' },
+            { id: 9, type: 'functional', topic: 'Recolección de Datos', case: 'Se necesita realizar una encuesta de satisfacción a los usuarios que visitan un punto de atención de la DIAN para medir la calidad del servicio.', enunciado: 'Para asegurar que los datos recolectados sean representativos y objetivos, ¿cuál es el mejor método?', options: ['Entrevistar únicamente a los usuarios que salen sonriendo, ya que son los más dispuestos a responder.', 'Realizar un muestreo aleatorio simple, seleccionando a los usuarios al azar (por ejemplo, a cada quinta persona que sale) para aplicarles una encuesta estandarizada.', 'Dejar un buzón de sugerencias para que los usuarios depositen sus comentarios de forma voluntaria.'], correct: 1, justification: 'El muestreo aleatorio simple asegura que cada miembro de la población tiene la misma probabilidad de ser seleccionado, reduciendo el sesgo y aumentando la representatividad de los resultados.' },
+            { id: 10, type: 'functional', topic: 'Soporte Técnico General', case: 'Un usuario se queja de que su computador está extremadamente lento, especialmente al abrir varios programas a la vez.', enunciado: '¿Cuál es la causa técnica más común para este tipo de lentitud?', options: ['El monitor del computador tiene una resolución muy alta.', 'La memoria RAM es insuficiente para la cantidad de aplicaciones que se están ejecutando simultáneamente.', 'El teclado del computador está sucio.'], correct: 1, justification: 'La memoria RAM es el recurso que el sistema utiliza para manejar las aplicaciones activas. Si se agota, el sistema operativo empieza a usar el disco duro (mucho más lento), causando una drástica reducción del rendimiento.' },
+            { id: 11, type: 'functional', topic: 'Seguridad Informática', case: 'Un funcionario recibe un correo electrónico que parece ser de un banco, solicitándole que haga clic en un enlace para actualizar sus datos de seguridad urgentemente.', enunciado: '¿Qué recomendación de seguridad se debe dar al funcionario?', options: ['Hacer clic en el enlace rápidamente para evitar que su cuenta sea bloqueada.', 'Eliminar el correo inmediatamente y no hacer clic en el enlace, ya que es una característica típica de un ataque de "phishing".', 'Responder al correo solicitando que le envíen la información en un archivo adjunto.'], correct: 1, justification: 'El phishing es una técnica de ingeniería social para robar credenciales. La recomendación estándar es nunca hacer clic en enlaces sospechosos y eliminar el correo. Las entidades legítimas no solicitan datos sensibles de esta manera.' },
+            { id: 12, type: 'functional', topic: 'Ofimática Avanzada', case: 'Necesitas enviar una comunicación personalizada por correo electrónico a 200 contribuyentes, donde cada correo incluya el nombre y el número de NIT específico del destinatario. Tienes los datos en una hoja de cálculo de Excel.', enunciado: '¿Qué funcionalidad de Microsoft Word y Outlook te permite automatizar esta tarea?', options: ['La función de "Copiar y Pegar" para cada uno de los 200 correos.', 'La herramienta "Combinar correspondencia" (Mail Merge).', 'La opción de "Insertar Tabla" en el cuerpo del correo.'], correct: 1, justification: 'La función de Combinar Correspondencia está diseñada precisamente para crear documentos y correos masivos personalizados a partir de una fuente de datos como una hoja de Excel.' },
+            { id: 13, type: 'functional', topic: 'Metodología ITIL', case: 'Después de resolver un incidente recurrente que afectaba a la red cada semana, el equipo de TI implementa una solución definitiva.', enunciado: 'Según ITIL, ¿qué proceso es el responsable de analizar la causa raíz de incidentes recurrentes y proponer soluciones definitivas?', options: ['Gestión de Incidentes.', 'Gestión de Solicitudes de Servicio.', 'Gestión de Problemas.'], correct: 2, justification: 'Mientras que la Gestión de Incidentes se enfoca en restaurar el servicio, la Gestión de Problemas se encarga de investigar la causa raíz subyacente de uno o más incidentes para prevenir su recurrencia.' },
+            { id: 14, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Un técnico necesita verificar la dirección IP, la máscara de subred y la puerta de enlace predeterminada de un equipo con sistema operativo Windows.', enunciado: '¿Qué comando debe ejecutar en la consola de comandos (CMD)?', options: ['ping www.google.com', 'ipconfig', 'format c:'], correct: 1, justification: 'El comando `ipconfig` muestra la configuración de red TCP/IP actual del equipo, incluyendo la dirección IP, máscara de subred y puerta de enlace.' },
+            { id: 15, type: 'functional', topic: 'Infraestructura TIC', case: 'Se debe garantizar que las copias de seguridad de la información crítica de la DIAN estén protegidas ante un desastre físico en la oficina principal (incendio, inundación).', enunciado: '¿Cuál es la mejor práctica para almacenar las copias de seguridad?', options: ['Guardar las copias de seguridad en un disco duro externo en la misma sala de servidores.', 'Implementar una estrategia de respaldo que incluya una copia externa (off-site), ya sea en otra sede física o en la nube.', 'Hacer copias de seguridad únicamente en los computadores de los directivos.'], correct: 1, justification: 'La regla 3-2-1 del respaldo indica que se deben tener 3 copias, en 2 medios distintos y 1 de ellas fuera del sitio (off-site). Esto asegura la recuperación de datos ante un desastre local.' },
+            { id: 16, type: 'functional', topic: 'Soporte Técnico General', case: 'Una impresora de red compartida deja de funcionar para todos los usuarios. Se ha verificado que la impresora está encendida y tiene papel.', enunciado: '¿Cuál sería el siguiente paso lógico de diagnóstico?', options: ['Reinstalar los drivers de la impresora en todos los computadores de los usuarios.', 'Verificar la conexión de red de la impresora y si tiene una dirección IP válida haciendo ping a su dirección.', 'Comprar una impresora nueva porque el modelo probablemente está obsoleto.'], correct: 1, justification: 'Antes de realizar acciones en los equipos cliente, se debe verificar la conectividad del dispositivo en la red. Un ping a la IP de la impresora confirma si está accesible a nivel de red.' },
+            { id: 17, type: 'functional', topic: 'Seguridad Informática', case: 'Un funcionario necesita acceso temporal a una carpeta de red con información sensible para un proyecto específico.', enunciado: '¿Cuál es la forma más segura de otorgar este acceso según el principio de mínimo privilegio?', options: ['Darle acceso de administrador a toda la unidad de red para que no tenga problemas.', 'Crear un permiso específico para su usuario que solo le dé acceso de lectura a esa carpeta y por un tiempo limitado.', 'Pedirle la contraseña a un compañero que ya tenga acceso para que la use temporalmente.'], correct: 1, justification: 'El principio de mínimo privilegio dicta que un usuario solo debe tener los permisos estrictamente necesarios para realizar su trabajo. Otorgar acceso limitado en alcance y tiempo es la práctica más segura.' },
+            { id: 18, type: 'functional', topic: 'Ofimática Avanzada', case: 'En un documento de Word, necesitas asegurarte de que todos los títulos de Nivel 1 tengan el mismo formato (fuente, tamaño, color) de manera consistente en todo el documento.', enunciado: '¿Qué herramienta de Word debes utilizar para lograr esto de manera eficiente?', options: ['Seleccionar cada título manualmente y aplicar el formato uno por uno.', 'Utilizar la herramienta "Copiar Formato" para cada título.', 'Definir y aplicar un "Estilo" (por ejemplo, "Título 1") a todos los títulos correspondientes.'], correct: 2, justification: 'Los estilos permiten aplicar un conjunto de formatos de manera consistente. Si se modifica el estilo, todos los textos que lo usan se actualizan automáticamente, garantizando la uniformidad.' },
+            { id: 19, type: 'functional', topic: 'Metodología ITIL', case: 'Se ha programado una actualización importante en el servidor principal de la DIAN que requerirá una interrupción del servicio durante el fin de semana.', enunciado: '¿Qué proceso de ITIL se encarga de gestionar y comunicar esta actividad planificada?', options: ['Gestión de Cambios.', 'Gestión de Incidentes.', 'Gestión de Activos de Servicio y Configuración.'], correct: 0, justification: 'La Gestión de Cambios se encarga de controlar el ciclo de vida de todos los cambios, permitiendo que se realicen cambios beneficiosos con una mínima interrupción de los servicios de TI.' },
+            { id: 20, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Un usuario reporta que su conexión Wi-Fi es muy débil y se desconecta frecuentemente, aunque sus compañeros cercanos no tienen problemas.', enunciado: '¿Cuál es una causa probable y una solución simple a investigar primero?', options: ['El router principal de la oficina está fallando y debe ser reemplazado.', 'Puede haber interferencia de otros dispositivos electrónicos cerca de su puesto o una obstrucción física.', 'El proveedor de internet está limitando su conexión específicamente.'], correct: 1, justification: 'La intensidad de la señal Wi-Fi puede ser afectada por factores locales como interferencia de microondas, teléfonos inalámbricos u objetos metálicos grandes. Mover el equipo o eliminar la fuente de interferencia es un primer paso lógico.' },
+            { id: 21, type: 'functional', topic: 'Infraestructura TIC', case: 'Se necesita implementar un sistema que permita a los funcionarios acceder a sus escritorios y aplicaciones de trabajo de forma remota y segura desde cualquier lugar.', enunciado: '¿Qué tipo de tecnología de infraestructura se adapta mejor a este requerimiento?', options: ['Una red de área local (LAN) tradicional.', 'Una Infraestructura de Escritorio Virtual (VDI).', 'Un sistema de almacenamiento conectado a la red (NAS).'], correct: 1, justification: 'VDI centraliza los escritorios de los usuarios en servidores en el centro de datos y los transmite a los dispositivos remotos, proporcionando un acceso seguro y gestionado centralmente.' },
+            { id: 22, type: 'functional', topic: 'Misionalidad de la DIAN', case: 'Un técnico de soporte está atendiendo a un contribuyente que se muestra frustrado y confundido con el uso del portal web de la entidad.', enunciado: 'Además de resolver el problema técnico, ¿qué acción del técnico refleja mejor los valores de servicio de la DIAN?', options: ['Resolver el problema lo más rápido posible y terminar la llamada para atender a más personas.', 'Mostrar empatía, explicarle pacientemente la solución y asegurarse de que el contribuyente comprenda cómo realizar el proceso por sí mismo en el futuro.', 'Decirle al contribuyente que lea el manual de usuario disponible en la página web.'], correct: 1, justification: 'La orientación al ciudadano implica no solo resolver el problema inmediato, sino también educar y empoderar al usuario, mostrando empatía y compromiso con un servicio de calidad.' },
+            { id: 23, type: 'functional', topic: 'Razonamiento Analítico', case: 'Un sistema genera alertas. El 80% de las alertas son de "Baja Prioridad" y el 20% son de "Alta Prioridad". De las alertas de "Alta Prioridad", el 50% son falsos positivos. Si se reciben 100 alertas en total.', enunciado: '¿Cuántas alertas de "Alta Prioridad" son reales (no son falsos positivos)?', options: ['20', '10', '50'], correct: 1, justification: 'Total de alertas: 100. Alertas de Alta Prioridad: 20% de 100 = 20. Falsos positivos de Alta Prioridad: 50% de 20 = 10. Alertas reales de Alta Prioridad: 20 - 10 = 10.' },
+            { id: 24, type: 'functional', topic: 'Recolección de Datos', case: 'Se debe crear un formulario para que los funcionarios reporten incidentes de TI. El objetivo es que los datos recolectados sean estructurados y fáciles de analizar.', enunciado: '¿Qué tipo de campos son más recomendables para el formulario?', options: ['Un único campo de texto grande para que el usuario describa todo libremente.', 'Campos cerrados como listas desplegables, casillas de verificación y selectores de fecha, complementados con un campo de texto para detalles adicionales.', 'Solo campos numéricos para facilitar los cálculos estadísticos.'], correct: 1, justification: 'Los campos cerrados (estructurados) garantizan la consistencia de los datos, facilitando su filtrado, agrupación y análisis. Un campo de texto adicional permite capturar detalles específicos que no encajan en las opciones predefinidas.' },
+            { id: 25, type: 'functional', topic: 'Soporte Técnico General', case: 'Un usuario informa que un archivo de Word en el que estaba trabajando se cerró inesperadamente y no guardó los últimos cambios.', enunciado: '¿Qué funcionalidad de Microsoft Word debería indicarle al usuario que busque para intentar recuperar el trabajo perdido?', options: ['La papelera de reciclaje del sistema operativo.', 'La función de "Autorrecuperación" o buscar archivos no guardados desde el menú "Archivo" > "Información".', 'El historial de versiones del sistema de archivos, aunque no se haya activado.'], correct: 1, justification: 'Microsoft Office tiene una función de Autorrecuperación que guarda copias de seguridad de los documentos a intervalos regulares, permitiendo recuperar versiones no guardadas tras un cierre inesperado.' },
+            { id: 26, type: 'functional', topic: 'Seguridad Informática', case: 'Se está configurando una nueva red Wi-Fi para los funcionarios de la DIAN.', enunciado: '¿Qué protocolo de seguridad inalámbrica ofrece el mayor nivel de protección actualmente?', options: ['WEP (Wired Equivalent Privacy)', 'WPA (Wi-Fi Protected Access)', 'WPA3 (Wi-Fi Protected Access 3)'], correct: 2, justification: 'WPA3 es el estándar de seguridad más reciente y robusto, ofreciendo una protección superior contra ataques de fuerza bruta y una encriptación más fuerte en comparación con sus predecesores WEP y WPA/WPA2.' },
+            { id: 27, type: 'functional', topic: 'Ofimática Avanzada', case: 'Necesitas crear una presentación en PowerPoint para una audiencia internacional y quieres asegurarte de que el diseño sea coherente en todas las diapositivas (logotipos, fuentes, colores).', enunciado: '¿Cuál es la forma más profesional de gestionar el diseño de la presentación?', options: ['Diseñar la primera diapositiva y luego duplicarla para crear las demás.', 'Utilizar el "Patrón de diapositivas" (Slide Master) para definir las plantillas de diseño, logotipos y fuentes.', 'Insertar las imágenes y los cuadros de texto manualmente en cada diapositiva.'], correct: 1, justification: 'El Patrón de diapositivas permite definir un diseño maestro que se aplica a todas las diapositivas, garantizando consistencia y facilitando cambios globales en el diseño con una sola edición.' },
+            { id: 28, type: 'functional', topic: 'Metodología ITIL', case: 'Un nuevo servicio de software ha pasado todas las pruebas y está listo para ser implementado para todos los usuarios de la entidad.', enunciado: '¿Qué proceso de ITIL gobierna la transición de este nuevo servicio desde el desarrollo hasta la operación en vivo?', options: ['Gestión de la Demanda.', 'Gestión de Despliegue y Liberación (Release and Deployment Management).', 'Gestión de Niveles de Servicio.'], correct: 1, justification: 'La Gestión de Despliegue y Liberación se encarga de planificar, programar y controlar el movimiento de liberaciones a los entornos de prueba y producción, asegurando que la integridad del entorno en vivo esté protegida.' },
+            { id: 29, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Un técnico está instalando un nuevo punto de acceso de red en una oficina. Debe conectar el cable de red al dispositivo.', enunciado: '¿Qué tipo de conector se utiliza comúnmente en los cables de red Ethernet?', options: ['RJ45', 'USB-C', 'HDMI'], correct: 0, justification: 'El conector RJ45 es el estándar universal para las conexiones de red Ethernet por cable (par trenzado).' },
+            { id: 30, type: 'functional', topic: 'Infraestructura TIC', case: 'Una aplicación crítica de la DIAN requiere un tiempo de actividad del 99.999% (cinco nueves).', enunciado: '¿Qué concepto de infraestructura es fundamental para alcanzar este nivel de disponibilidad?', options: ['Redundancia.', 'Virtualización.', 'Cifrado de datos.'], correct: 0, justification: 'La redundancia, que implica duplicar componentes críticos del sistema (servidores, fuentes de poder, conexiones de red), es la estrategia clave para eliminar puntos únicos de falla y garantizar una alta disponibilidad.' },
+            { id: 31, type: 'functional', topic: 'Soporte Técnico General', case: 'Un funcionario no puede abrir un archivo PDF que recibió por correo, aunque otros archivos PDF sí abren correctamente.', enunciado: '¿Cuál es la causa más probable del problema?', options: ['El programa lector de PDF (ej. Adobe Reader) está desactualizado en su equipo.', 'El archivo PDF específico está corrupto o dañado.', 'El sistema operativo del computador es incompatible con los archivos PDF.'], correct: 1, justification: 'Si otros archivos del mismo tipo funcionan, es muy probable que el problema resida en el archivo en sí y no en el software o el sistema. El archivo pudo haberse dañado durante la descarga o la transferencia.' },
+            { id: 32, type: 'functional', topic: 'Seguridad Informática', case: 'Se debe implementar un método de autenticación que requiera que los usuarios proporcionen dos pruebas de identidad diferentes para acceder a los sistemas de la DIAN.', enunciado: '¿Cómo se denomina esta medida de seguridad?', options: ['Autenticación de factor único (SFA).', 'Autenticación de dos factores (2FA) o multifactor (MFA).', 'Autorización basada en roles (RBAC).'], correct: 1, justification: 'La 2FA/MFA es una capa de seguridad que requiere dos o más métodos de verificación (algo que sabes, algo que tienes, algo que eres) para acceder a un recurso, aumentando significativamente la seguridad.' },
+            { id: 33, type: 'functional', topic: 'Ofimática Avanzada', case: 'En una hoja de cálculo de Excel, tienes una lista de ventas en la columna A y quieres calcular la suma de todas las ventas que superan los $1,000,000.', enunciado: '¿Qué función de Excel te permite sumar valores que cumplen una condición específica?', options: ['SUMA()', 'CONTAR.SI()', 'SUMAR.SI()'], correct: 2, justification: 'La función SUMAR.SI (o SUMIF en inglés) está diseñada para sumar los valores de un rango que cumplen con un criterio determinado.' },
+            { id: 34, type: 'functional', topic: 'Metodología ITIL', case: 'La DIAN firma un contrato con un proveedor de servicios en la nube que garantiza un 99.9% de tiempo de actividad mensual para un servicio crítico.', enunciado: '¿En qué documento de ITIL se formalizan estos acuerdos sobre los niveles de rendimiento del servicio?', options: ['Acuerdo de Nivel de Servicio (SLA - Service Level Agreement).', 'Catálogo de Servicios.', 'Base de Datos de Gestión de la Configuración (CMDB).'], correct: 0, justification: 'Un SLA es un contrato entre un proveedor de servicios y un cliente que define los niveles de servicio esperados, las métricas para medirlos y las penalizaciones en caso de incumplimiento.' },
+            { id: 35, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Se necesita asignar direcciones IP a los computadores de una oficina de manera automática para simplificar la gestión de la red.', enunciado: '¿Qué protocolo de red se utiliza para esta función?', options: ['DNS (Domain Name System)', 'FTP (File Transfer Protocol)', 'DHCP (Dynamic Host Configuration Protocol)'], correct: 2, justification: 'DHCP es el protocolo que permite a un servidor asignar automáticamente una dirección IP y otros parámetros de configuración de red a los dispositivos cliente.' },
+            { id: 36, type: 'functional', topic: 'Infraestructura TIC', case: 'Se requiere una solución de almacenamiento centralizado en la red para que varios usuarios puedan acceder y compartir archivos de manera colaborativa.', enunciado: '¿Qué tipo de dispositivo está diseñado específicamente para este propósito?', options: ['Un disco duro externo USB.', 'Un NAS (Network Attached Storage).', 'Una tarjeta de memoria SD.'], correct: 1, justification: 'Un NAS es un dispositivo de almacenamiento dedicado que se conecta a una red y proporciona servicios de almacenamiento y acceso a archivos a otros dispositivos de esa red.' },
+            { id: 37, type: 'functional', topic: 'Misionalidad de la DIAN', case: 'Un ciudadano llama a la línea de soporte técnico de la DIAN para una consulta. El técnico debe registrar la información del ciudadano en el sistema.', enunciado: '¿Qué principio rige el manejo de los datos personales del ciudadano por parte del técnico?', options: ['El principio de máxima publicidad, compartiendo los datos con otros compañeros por si pueden ayudar.', 'El principio de tratamiento de datos según la Ley de Habeas Data (Ley 1581 de 2012), garantizando la confidencialidad y el uso para fines autorizados.', 'El principio de conveniencia, registrando solo los datos que el técnico considere fáciles de escribir.'], correct: 1, justification: 'La Ley de Habeas Data regula el tratamiento de datos personales en Colombia. Todo funcionario debe manejar esta información con estricta confidencialidad y para los fines legítimos y autorizados por la ley y el ciudadano.' },
+            { id: 38, type: 'functional', topic: 'Razonamiento Analítico', case: 'En un equipo de 5 técnicos, el Técnico A resuelve 10 casos por día, el B resuelve 8, el C resuelve 12, el D resuelve 10 y el E resuelve 5.', enunciado: '¿Cuál es el promedio de casos resueltos por técnico en un día?', options: ['10', '9', '12'], correct: 1, justification: 'Suma de casos: 10 + 8 + 12 + 10 + 5 = 45. Número de técnicos: 5. Promedio: 45 / 5 = 9.' },
+            { id: 39, type: 'functional', topic: 'Recolección de Datos', case: 'Se está diseñando una base de datos para almacenar información de los contribuyentes. Se necesita una forma de identificar de manera única a cada contribuyente.', enunciado: '¿Qué elemento se debe definir en la tabla de la base de datos para este propósito?', options: ['Un campo de texto para comentarios.', 'Una clave primaria (Primary Key), como el número de NIT.', 'Un índice no único sobre el campo de la ciudad.'], correct: 1, justification: 'Una clave primaria es una restricción en una base de datos que identifica de forma única cada registro en una tabla. El NIT es un candidato ideal para ser clave primaria de un contribuyente.' },
+            { id: 40, type: 'functional', topic: 'Soporte Técnico General', case: 'Un usuario reporta que los colores en su monitor se ven distorsionados, con un tinte azulado o rojizo.', enunciado: '¿Cuál es la primera verificación física que se debe realizar?', options: ['Asegurarse de que el cable de video (VGA, HDMI, DisplayPort) esté firmemente conectado tanto al monitor como al computador.', 'Actualizar el controlador de la tarjeta de video.', 'Reemplazar el monitor inmediatamente.'], correct: 0, justification: 'Una conexión de cable de video floja o defectuosa es una causa muy común de distorsión de colores, ya que algunos pines responsables de un color pueden no estar haciendo buen contacto. Es la verificación más simple y rápida.' },
+            { id: 41, type: 'functional', topic: 'Seguridad Informática', case: 'Un sistema de la DIAN debe ser accesible desde internet. Se necesita un dispositivo que actúe como una barrera de seguridad entre la red interna de la DIAN y la red externa (internet), controlando el tráfico entrante y saliente.', enunciado: '¿Qué dispositivo de seguridad cumple esta función?', options: ['Un switch.', 'Un repetidor de Wi-Fi.', 'Un firewall.'], correct: 2, justification: 'Un firewall es un dispositivo de seguridad de red que monitorea y filtra el tráfico de red entrante y saliente basándose en políticas de seguridad predeterminadas, estableciendo una barrera entre una red interna segura y una red externa no confiable.' },
+            { id: 42, type: 'functional', topic: 'Ofimática Avanzada', case: 'En una hoja de Excel, tienes una tabla con datos de contribuyentes, incluyendo su NIT en la primera columna y su nombre en la segunda. En otra hoja, tienes una lista de NITs y necesitas traer el nombre correspondiente a cada uno.', enunciado: '¿Qué función de búsqueda es la más adecuada para esta tarea?', options: ['BUSCARV (VLOOKUP)', 'SUMA()', 'CONCATENAR()'], correct: 0, justification: 'BUSCARV está diseñada específicamente para buscar un valor en la primera columna de una tabla y devolver un valor en la misma fila de una columna especificada.' },
+            { id: 43, type: 'functional', topic: 'Metodología ITIL', case: 'Un usuario llama a la mesa de ayuda para reportar un error en una aplicación. El técnico de soporte resuelve el incidente y cierra el ticket.', enunciado: 'Para asegurar la mejora continua, ¿qué debería hacer el usuario según las buenas prácticas de ITIL?', options: ['No volver a contactar a la mesa de ayuda para no molestar.', 'Recibir y responder una encuesta de satisfacción sobre la resolución del incidente.', 'Intentar arreglar el problema por su cuenta la próxima vez.'], correct: 1, justification: 'La retroalimentación del usuario a través de encuestas de satisfacción es un componente clave para medir la eficacia de la gestión de incidentes y para la mejora continua del servicio, uno de los pilares de ITIL.' },
+            { id: 44, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Se necesita traducir los nombres de dominio fáciles de recordar para los humanos (ej. www.dian.gov.co) a las direcciones IP que entienden las máquinas.', enunciado: '¿Qué servicio de red se encarga de esta "traducción"?', options: ['DHCP', 'DNS (Domain Name System)', 'NAT (Network Address Translation)'], correct: 1, justification: 'El DNS funciona como la "guía telefónica" de internet, traduciendo los nombres de dominio legibles para humanos a las direcciones IP numéricas necesarias para localizar los recursos en la red.' },
+            { id: 45, type: 'functional', topic: 'Infraestructura TIC', case: 'Una oficina de la DIAN tiene un alto número de computadores de escritorio antiguos que consumen mucha energía y son costosos de mantener y actualizar.', enunciado: '¿Qué modelo de cliente ligero (thin client) podría ser una alternativa más eficiente en términos de costo y gestión?', options: ['Reemplazar todos los equipos por portátiles de última generación para cada usuario.', 'Implementar una solución de clientes ligeros que se conectan a un servidor centralizado (VDI), reduciendo el costo y la gestión de los puntos finales.', 'Darle a cada usuario una tableta para que la use como su equipo principal.'], correct: 1, justification: 'Los clientes ligeros son dispositivos de bajo costo y bajo consumo que dependen de un servidor central para la mayor parte del procesamiento. Esto simplifica la gestión, reduce costos de hardware y energía, y centraliza la seguridad.' },
+            { id: 46, type: 'functional', topic: 'Soporte Técnico General', case: 'Un usuario necesita liberar espacio en el disco duro de su computador que está casi lleno.', enunciado: '¿Qué herramienta integrada en Windows es la más adecuada para eliminar archivos innecesarios como temporales y archivos de sistema antiguos?', options: ['El Administrador de Tareas.', 'El Liberador de espacio en disco (Disk Cleanup).', 'El Panel de Control de Sonido.'], correct: 1, justification: 'El Liberador de espacio en disco es una utilidad de mantenimiento de Windows diseñada para escanear y eliminar archivos no esenciales del disco duro para liberar espacio.' },
+            { id: 47, type: 'functional', topic: 'Seguridad Informática', case: 'Un desarrollador necesita probar un nuevo software que podría ser inestable o inseguro sin afectar el sistema operativo principal de su computador.', enunciado: '¿Qué entorno le permitiría ejecutar el software de forma aislada?', options: ['Una máquina virtual (VM) o un contenedor (sandbox).', 'Una partición de disco diferente.', 'Una cuenta de usuario sin privilegios de administrador.'], correct: 0, justification: 'Las máquinas virtuales y los sandboxes crean un entorno completamente aislado del sistema anfitrión, permitiendo ejecutar y probar software de manera segura. Si el software causa problemas, no afectará al sistema principal.' },
+            { id: 48, type: 'functional', topic: 'Ofimática Avanzada', case: 'En una tabla de Excel, tienes fechas en la columna A y valores en la columna B. Necesitas crear un gráfico que muestre cómo han cambiado los valores a lo largo del tiempo.', enunciado: '¿Qué tipo de gráfico es el más apropiado para visualizar una tendencia en el tiempo?', options: ['Gráfico de pastel (circular).', 'Gráfico de barras.', 'Gráfico de líneas.'], correct: 2, justification: 'Los gráficos de líneas son ideales para mostrar datos continuos a lo largo del tiempo, permitiendo visualizar fácilmente tendencias, patrones y fluctuaciones.' },
+            { id: 49, type: 'functional', topic: 'Metodología ITIL', case: 'El equipo de TI necesita un inventario centralizado de todos los componentes de la infraestructura (servidores, software, redes) y las relaciones entre ellos.', enunciado: '¿Qué elemento de ITIL se utiliza para almacenar esta información?', options: ['El Plan de Capacidad.', 'La Base de Datos de Gestión de la Configuración (CMDB - Configuration Management Database).', 'El Portafolio de Servicios.'], correct: 1, justification: 'La CMDB es una base de datos que almacena información sobre todos los componentes de TI (elementos de configuración o CIs) y las relaciones entre ellos, siendo fundamental para la mayoría de los demás procesos de ITIL.' },
+            { id: 50, type: 'functional', topic: 'Soporte Técnico en Redes y Telecomunicaciones', case: 'Un técnico está configurando un firewall para permitir que los usuarios naveguen por internet.', enunciado: '¿Qué puerto TCP es el estándar para el tráfico web HTTP?', options: ['Puerto 25 (SMTP)', 'Puerto 80 (HTTP)', 'Puerto 443 (HTTPS)'], correct: 1, justification: 'El puerto 80 es el puerto estándar y universalmente reconocido para el tráfico del Protocolo de Transferencia de Hipertexto (HTTP), que es el protocolo base de la web.' },
+            { id: 51, type: 'functional', topic: 'Infraestructura TIC', case: 'Se necesita una tecnología que permita ejecutar múltiples sistemas operativos (como Windows y Linux) simultáneamente en una única máquina física.', enunciado: '¿Qué tecnología habilita esta capacidad?', options: ['RAID (Redundant Array of Independent Disks)', 'Virtualización (a través de un hipervisor).', 'API (Application Programming Interface)'], correct: 1, justification: 'La virtualización permite crear representaciones virtuales de recursos de TI, como servidores, almacenamiento o redes. Un hipervisor es el software que crea y ejecuta máquinas virtuales, cada una con su propio sistema operativo, en un solo hardware físico.' },
+            { id: 52, type: 'functional', topic: 'Misionalidad de la DIAN', case: 'El gobierno implementa una nueva reforma tributaria que afecta los procedimientos de declaración de impuestos.', enunciado: '¿Cuál es la responsabilidad del área de TI de la DIAN frente a este cambio?', options: ['Mantener los sistemas sin cambios, ya que la reforma es un tema legal y no técnico.', 'Asegurar que los sistemas de información y aplicaciones (ej. MUISCA) se actualicen de manera oportuna y correcta para reflejar la nueva normativa.', 'Informar a los contribuyentes que deben realizar sus cálculos manualmente hasta que los sistemas se adapten.'], correct: 1, justification: 'Una función misional clave del área de TI de la DIAN es garantizar que la plataforma tecnológica soporte y refleje fielmente la normativa tributaria, aduanera y cambiaria vigente, facilitando el cumplimiento por parte de los contribuyentes.' },
+            { id: 53, type: 'functional', topic: 'Razonamiento Analítico', case: 'Un proyecto de TI tiene 4 fases. La Fase 1 tarda 2 semanas. La Fase 2 tarda el doble que la Fase 1. La Fase 3 tarda la mitad que la Fase 2. La Fase 4 tarda 1 semana.', enunciado: '¿Cuál es la duración total del proyecto?', options: ['7 semanas', '8 semanas', '9 semanas'], correct: 2, justification: 'Fase 1 = 2 semanas. Fase 2 = 2 * 2 = 4 semanas. Fase 3 = 4 / 2 = 2 semanas. Fase 4 = 1 semana. Total = 2 + 4 + 2 + 1 = 9 semanas.' },
+            { id: 54, type: 'functional', topic: 'Recolección de Datos', case: 'Se está analizando un conjunto de datos sobre tiempos de respuesta a incidentes. Hay algunos valores extremadamente altos que parecen ser errores de entrada y están distorsionando el promedio.', enunciado: '¿Qué medida de tendencia central sería más resistente a estos valores atípicos (outliers)?', options: ['La media (promedio).', 'La moda.', 'La mediana.'], correct: 2, justification: 'La mediana, que es el valor central de un conjunto de datos ordenado, se ve mucho menos afectada por valores extremos (outliers) en comparación con la media, que los incluye a todos en su cálculo.' },
+            
+            // --- PARTE II: COMPETENCIAS COMPORTAMENTALES (64) ---
+            { id: 55, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Me resulta fácil adaptar mis ideas para incorporar las sugerencias y aportes de mis compañeros de equipo.' },
+            { id: 56, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Siento una gran satisfacción personal cuando logro superar una meta que parecía muy difícil de alcanzar.' },
+            { id: 57, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Cuando se introducen nuevas tecnologías o procedimientos en mi trabajo, los veo como una oportunidad para aprender y mejorar.' },
+            { id: 58, type: 'behavioral', competency: 'Comunicación', statement: 'Antes de comunicar una idea compleja, me tomo el tiempo de estructurarla para que sea fácil de entender para los demás.' },
+            { id: 59, type: 'behavioral', competency: 'Innovación', statement: 'Constantemente pienso en formas más eficientes o creativas de realizar las tareas que me asignan.' },
+            { id: 60, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Prefiero seguir un plan de trabajo detallado en lugar de improvisar sobre la marcha.' },
+            { id: 61, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Cuando un ciudadano o usuario está molesto, mantengo la calma y me enfoco en entender el problema para encontrar una solución.' },
+            { id: 62, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Me ofrezco voluntariamente para ayudar a mis compañeros cuando veo que están sobrecargados de trabajo.' },
+            { id: 63, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Considero que recibir retroalimentación sobre mi desempeño es esencial para mi crecimiento profesional.' },
+            { id: 64, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Si no conozco la respuesta a una pregunta técnica, investigo a fondo antes de dar una solución.' },
+            { id: 65, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Me siento cómodo trabajando en varios proyectos a la vez, aunque requieran diferentes habilidades.' },
+            { id: 66, type: 'behavioral', competency: 'Integridad', statement: 'Para mí, es importante entender cómo mi trabajo contribuye a los objetivos generales de la organización.' },
+            { id: 67, type: 'behavioral', competency: 'Comunicación', statement: 'Prefiero comunicar las malas noticias de manera directa y honesta en lugar de posponerlas.' },
+            { id: 68, type: 'behavioral', competency: 'Innovación', statement: 'Disfruto buscando soluciones a problemas que otros consideran demasiado complicados.' },
+            { id: 69, type: 'behavioral', competency: 'Innovación', statement: 'Cuando un procedimiento establecido no funciona, propongo activamente una alternativa mejorada.' },
+            { id: 70, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Me aseguro de que los usuarios entiendan la solución que les proporciono, explicándoles en términos sencillos.' },
+            { id: 71, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Creo que un buen equipo es aquel donde los miembros se apoyan mutuamente para lograr un objetivo común.' },
+            { id: 72, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Establezco mis propias metas personales para mejorar continuamente mi rendimiento laboral.' },
+            { id: 73, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Los cambios inesperados en mis tareas diarias no me generan estrés; los manejo con flexibilidad.' },
+            { id: 74, type: 'behavioral', competency: 'Comunicación', statement: 'Soy bueno parafraseando lo que otros dicen para asegurarme de que he entendido correctamente su punto de vista.' },
+            { id: 75, type: 'behavioral', competency: 'Innovación', statement: 'Me gusta experimentar con nuevas herramientas que podrían hacer mi trabajo más rápido.' },
+            { id: 76, type: 'behavioral', competency: 'Orientación al Logro', statement: 'La calidad de mi trabajo es más importante para mí que la velocidad con la que lo termino.' },
+            { id: 77, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Trato a cada ciudadano con la misma paciencia y respeto, sin importar la complejidad de su solicitud.' },
+            { id: 78, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Comparto conocimientos y recursos con mis colegas para facilitar el trabajo de todos.' },
+            { id: 79, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Cuando cometo un error, lo veo como una oportunidad de aprendizaje.' },
+            { id: 80, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Me adapto fácilmente a diferentes estilos de liderazgo y de trabajo de mis superiores.' },
+            { id: 81, type: 'behavioral', competency: 'Comunicación', statement: 'Evito usar jerga técnica cuando hablo con personas que no son de mi área.' },
+            { id: 82, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Me siento motivado por los desafíos y las tareas que me exigen esforzarme al máximo.' },
+            { id: 83, type: 'behavioral', competency: 'Innovación', statement: 'Propongo ideas nuevas en las reuniones de equipo, incluso si van en contra de la opinión popular.' },
+            { id: 84, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Dedico tiempo a planificar mis tareas diarias para optimizar mi jornada laboral.' },
+            { id: 85, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Creo que la clave para resolver un conflicto en un equipo es la comunicación abierta y honesta.' },
+            { id: 86, type: 'behavioral', competency: 'Integridad', statement: 'Me aseguro de cumplir con los plazos establecidos, incluso si eso significa trabajar horas extra ocasionalmente.' },
+            { id: 87, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Puedo cambiar de una tarea a otra rápidamente sin perder la concentración.' },
+            { id: 88, type: 'behavioral', competency: 'Comunicación', statement: 'Soy capaz de explicar las razones detrás de una decisión o procedimiento de manera clara y convincente.' },
+            { id: 89, type: 'behavioral', competency: 'Innovación', statement: 'Disfruto aprendiendo sobre temas que no están directamente relacionados con mi trabajo, pero que podrían ser útiles en el futuro.' },
+            { id: 90, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Cuando me enfrento a un problema, analizo todas las opciones posibles antes de decidir un curso de acción.' },
+            { id: 91, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Me siento cómodo pidiendo ayuda a mis compañeros cuando no sé cómo resolver algo.' },
+            { id: 92, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Me pongo en el lugar del usuario para entender mejor sus frustraciones y necesidades.' },
+            { id: 93, type: 'behavioral', competency: 'Integridad', statement: 'Me aseguro de que mi trabajo cumpla con los estándares de calidad requeridos por la entidad.' },
+            { id: 94, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'En una discusión grupal, me esfuerzo por encontrar un punto medio que satisfaga a todas las partes.' },
+            { id: 95, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Soy persistente y no me rindo fácilmente cuando me encuentro con un obstáculo.' },
+            { id: 96, type: 'behavioral', competency: 'Innovación', statement: 'Me mantengo actualizado sobre las nuevas tendencias y tecnologías en mi campo profesional.' },
+            { id: 97, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Prefiero tener instrucciones claras y precisas para realizar mi trabajo.' },
+            { id: 98, type: 'behavioral', competency: 'Comunicación', statement: 'Me comunico de manera proactiva para mantener a mi equipo informado sobre el progreso de mis tareas.' },
+            { id: 99, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Me siento más productivo cuando trabajo en un ambiente colaborativo que cuando trabajo solo.' },
+            { id: 100, type: 'behavioral', competency: 'Adaptabilidad', statement: 'La posibilidad de desarrollar nuevas habilidades es un factor importante para mí en un trabajo.' },
+            { id: 101, type: 'behavioral', competency: 'Integridad', statement: 'Me tomo el tiempo necesario para verificar la exactitud de la información antes de entregar un informe.' },
+            { id: 102, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Si un compañero de equipo tiene una crítica sobre mi trabajo, la escucho atentamente sin ponerme a la defensiva.' },
+            { id: 103, type: 'behavioral', competency: 'Innovación', statement: 'Me siento cómodo tomando la iniciativa para resolver un problema sin que me lo pidan.' },
+            { id: 104, type: 'behavioral', competency: 'Comunicación', statement: 'Soy bueno resumiendo información compleja en puntos clave y fáciles de recordar.' },
+            { id: 105, type: 'behavioral', competency: 'Orientación al Logro', statement: 'Me gusta definir un objetivo claro antes de comenzar cualquier tarea o proyecto.' },
+            { id: 106, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Me adapto a los cambios en las prioridades del equipo sin quejarme.' },
+            { id: 107, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Creo que la diversidad de opiniones en un equipo enriquece el resultado final.' },
+            { id: 108, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Me esfuerzo por entender las necesidades no expresadas de los usuarios o ciudadanos.' },
+            { id: 109, type: 'behavioral', competency: 'Innovación', statement: 'Si una tarea es monótona, busco la manera de hacerla más interesante o eficiente.' },
+            { id: 110, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Prefiero la colaboración y el consenso a la hora de tomar decisiones importantes en el equipo.' },
+            { id: 111, type: 'behavioral', competency: 'Integridad', statement: 'Me aseguro de documentar mi trabajo para que otros puedan entenderlo o continuarlo si es necesario.' },
+            { id: 112, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Me siento motivado cuando mi trabajo tiene un impacto positivo en los demás.' },
+            { id: 113, type: 'behavioral', competency: 'Adaptabilidad', statement: 'Soy capaz de trabajar eficazmente bajo presión y con plazos ajustados.' },
+            { id: 114, type: 'behavioral', competency: 'Comunicación', statement: 'Me resulta natural expresar mis ideas de forma clara y ordenada.' },
+            { id: 115, type: 'behavioral', competency: 'Innovación', statement: 'Busco activamente oportunidades para automatizar tareas repetitivas.' },
+            { id: 116, type: 'behavioral', competency: 'Integridad', statement: 'Valoro la puntualidad y la asistencia como una muestra de respeto y compromiso.' },
+            { id: 117, type: 'behavioral', competency: 'Orientación al Ciudadano', statement: 'Me aseguro de dar seguimiento a las solicitudes de los usuarios hasta que se resuelven por completo.' },
+            { id: 118, type: 'behavioral', competency: 'Trabajo en Equipo', statement: 'Creo que el éxito del equipo es más importante que mi éxito individual.' },
+
+            // --- PARTE III: PRUEBA DE INTEGRIDAD (20) ---
+            { id: 119, type: 'integrity', competency: 'Integridad', statement: 'Creo que es fundamental admitir un error propio, incluso si nadie más se ha dado cuenta de que ocurrió.' },
+            { id: 120, type: 'integrity', competency: 'Integridad', statement: 'Las normas y los procedimientos establecidos deben seguirse rigurosamente, sin importar si la situación es urgente.' },
+            { id: 121, type: 'integrity', competency: 'Integridad', statement: 'Al tomar una decisión que afecta a varias personas, me aseguro de aplicar los mismos criterios para todos, sin favoritismos.' },
+            { id: 122, type: 'integrity', competency: 'Comunicación', statement: 'Escucho con atención las opiniones de los demás, aunque sean completamente opuestas a las mías.' },
+            { id: 123, type: 'integrity', competency: 'Orientación al Logro', statement: 'Me esfuerzo por entregar mis asignaciones antes de la fecha límite, no justo en el último momento.' },
+            { id: 124, type: 'integrity', competency: 'Integridad', statement: 'La confidencialidad de la información de los contribuyentes es una prioridad absoluta que nunca debe ser comprometida.' },
+            { id: 125, type: 'integrity', competency: 'Integridad', statement: 'Es inaceptable utilizar el tiempo laboral o los recursos de la entidad para asuntos personales.' },
+            { id: 126, type: 'integrity', competency: 'Integridad', statement: 'Un servidor público debe estar dispuesto a colaborar con la justicia siempre que sea requerido.' },
+            { id: 127, type: 'integrity', competency: 'Orientación al Ciudadano', statement: 'El trato respetuoso debe extenderse a todos por igual, sin importar su cargo, condición social o económica.' },
+            { id: 128, type: 'integrity', competency: 'Integridad', statement: 'Siento un fuerte compromiso con los objetivos de la entidad para la que trabajo.' },
+            { id: 129, type: 'integrity', competency: 'Integridad', statement: 'Si un amigo me pidiera agilizar un trámite usando mi posición en la entidad, me negaría rotundamente.' },
+            { id: 130, type: 'integrity', competency: 'Integridad', statement: 'La transparencia en la gestión pública es un principio no negociable para mí.' },
+            { id: 131, type: 'integrity', competency: 'Integridad', statement: 'Es importante reportar cualquier acto de corrupción o falta de ética que presencie en mi lugar de trabajo.' },
+            { id: 132, type: 'integrity', competency: 'Integridad', statement: 'Prefiero perder una ventaja personal a actuar de una manera que considere incorrecta.' },
+            { id: 133, type: 'integrity', competency: 'Integridad', statement: 'Me siento personalmente responsable de proteger los bienes y recursos públicos que se me confían.' },
+            { id: 134, type: 'integrity', competency: 'Integridad', statement: 'La honestidad es el valor más importante que debe tener un servidor público.' },
+            { id: 135, type: 'integrity', competency: 'Integridad', statement: 'Cumplir con mis deberes es mi principal prioridad en el trabajo, por encima de las relaciones personales.' },
+            { id: 136, type: 'integrity', competency: 'Integridad', statement: 'Creo que las reglas aplican para todos, incluyéndome a mí, sin excepciones.' },
+            { id: 137, type: 'integrity', competency: 'Integridad', statement: 'Me aseguro de que mis acciones siempre estén alineadas con los valores de la organización.' },
+            { id: 138, type: 'integrity', competency: 'Integridad', statement: 'Para mí, el servicio público es una vocación que exige un alto nivel de integridad y compromiso.' },
+        ];
+        
+        const appState = {
+            currentQuestionIndex: 0,
+            userAnswers: [],
+            quizStartTime: null,
+            sections: [
+                { name: 'Competencias Funcionales', start: 0, end: 53 },
+                { name: 'Competencias Comportamentales', start: 54, end: 117 },
+                { name: 'Prueba de Integridad', start: 118, end: 137 }
+            ],
+            currentSectionIndex: 0
+        };
+
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const startBtn = document.getElementById('start-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const reviewBtn = document.getElementById('review-btn');
+        const reviewSection = document.getElementById('review-section');
+        const questionContainer = document.getElementById('question-container');
+        const quizTitle = document.getElementById('quiz-title');
+        const quizProgressText = document.getElementById('quiz-progress-text');
+        const quizProgressBar = document.getElementById('quiz-progress-bar');
+        const historySection = document.getElementById('history-section');
+        const historyList = document.getElementById('history-list');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+        
+        let functionalChartInstance = null;
+        let behavioralChartInstance = null;
+
+        function startQuiz() {
+            appState.currentQuestionIndex = 0;
+            appState.userAnswers = [];
+            appState.currentSectionIndex = 0;
+            appState.quizStartTime = new Date();
+            welcomeScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            quizScreen.classList.remove('hidden');
+            reviewSection.classList.add('hidden');
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const question = questions[appState.currentQuestionIndex];
+            let content = '';
+
+            updateProgress();
+
+            if (question.type === 'functional') {
+                content = `
+                    <div class="mb-4 p-4 bg-slate-100 rounded-lg">
+                        <p class="text-sm font-semibold text-slate-500 mb-2">CASO:</p>
+                        <p>${question.case}</p>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-4">${question.enunciado}</p>
+                        <div class="space-y-3">
+                            ${question.options.map((opt, index) => `
+                                <div onclick="selectAnswer(${index})" class="quiz-option border-2 border-slate-200 p-4 rounded-lg cursor-pointer hover:bg-slate-100">
+                                    <label class="flex items-center cursor-pointer w-full">
+                                        <span class="font-bold mr-3">${String.fromCharCode(65 + index)}.</span>
+                                        <span>${opt}</span>
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div id="justification-container" class="hidden mt-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded">
+                            <p class="font-bold text-amber-700">Justificación:</p>
+                            <p id="justification-text" class="text-sm text-amber-800"></p>
+                        </div>
+                    </div>
+                `;
+            } else { // behavioral or integrity
+                content = `
+                    <div>
+                        <p class="text-lg text-center font-medium mb-6 p-6 bg-slate-100 rounded-lg">"${question.statement}"</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            ${['Totalmente en desacuerdo', 'En desacuerdo', 'De acuerdo', 'Totalmente de acuerdo'].map((opt, index) => `
+                                <div onclick="selectAnswer(${index})" class="quiz-option border-2 border-slate-200 p-4 rounded-lg cursor-pointer hover:bg-slate-100 text-center">
+                                    <label class="cursor-pointer">${opt}</label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            questionContainer.innerHTML = content;
+            nextBtn.disabled = true;
+        }
+
+        function selectAnswer(selectedIndex) {
+            const question = questions[appState.currentQuestionIndex];
+            appState.userAnswers[appState.currentQuestionIndex] = selectedIndex;
+            const options = document.querySelectorAll('.quiz-option');
+
+            options.forEach(opt => {
+                opt.classList.remove('hover:bg-slate-100');
+                opt.style.pointerEvents = 'none';
+            });
+
+            if (question.type === 'functional') {
+                const isCorrect = selectedIndex === question.correct;
+                
+                if (isCorrect) {
+                    options[selectedIndex].classList.add('correct');
+                } else {
+                    options[selectedIndex].classList.add('incorrect');
+                    options[question.correct].classList.add('correct');
+                }
+
+                const justificationContainer = document.getElementById('justification-container');
+                const justificationText = document.getElementById('justification-text');
+                justificationText.textContent = question.justification;
+                justificationContainer.classList.remove('hidden');
+
+            } else { // behavioral or integrity
+                options.forEach((el, idx) => {
+                    el.classList.toggle('selected', idx === selectedIndex);
+                });
+            }
+            
+            nextBtn.disabled = false;
+        }
+
+        function handleNext() {
+            if (appState.currentQuestionIndex < questions.length - 1) {
+                appState.currentQuestionIndex++;
+                const currentSection = appState.sections[appState.currentSectionIndex];
+                if(appState.currentQuestionIndex > currentSection.end) {
+                    appState.currentSectionIndex++;
+                }
+                renderQuestion();
+            } else {
+                showResults();
+            }
+        }
+        
+        function updateProgress() {
+            const section = appState.sections[appState.currentSectionIndex];
+            quizTitle.textContent = section.name;
+            
+            const questionsInSection = section.end - section.start + 1;
+            const currentQuestionInSection = appState.currentQuestionIndex - section.start + 1;
+            quizProgressText.textContent = `Pregunta ${currentQuestionInSection} de ${questionsInSection}`;
+            
+            const totalProgress = ((appState.currentQuestionIndex + 1) / questions.length) * 100;
+            quizProgressBar.style.width = `${totalProgress}%`;
+        }
+
+        function showResults() {
+            quizScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+            const results = calculateResults();
+            saveAttempt(results);
+            renderCharts(results);
+        }
+        
+        function calculateResults() {
+             const functionalQuestions = questions.slice(0, 54);
+            let correctAnswers = 0;
+            functionalQuestions.forEach((q, index) => {
+                if (appState.userAnswers[index] === q.correct) {
+                    correctAnswers++;
+                }
+            });
+
+            const competencies = {
+                'Trabajo en Equipo': { total: 0, count: 0 },
+                'Orientación al Logro': { total: 0, count: 0 },
+                'Adaptabilidad': { total: 0, count: 0 },
+                'Comunicación': { total: 0, count: 0 },
+                'Innovación': { total: 0, count: 0 },
+                'Orientación al Ciudadano': { total: 0, count: 0 },
+                'Integridad': { total: 0, count: 0 }
+            };
+            
+            const behavioralIntegrityQuestions = questions.slice(54);
+            behavioralIntegrityQuestions.forEach((q, index) => {
+                const answerValue = appState.userAnswers[54 + index];
+                if (competencies[q.competency] && answerValue !== undefined) {
+                    competencies[q.competency].total += answerValue;
+                    competencies[q.competency].count++;
+                }
+            });
+            
+            const competencyData = {};
+            Object.keys(competencies).forEach(key => {
+                const comp = competencies[key];
+                competencyData[key] = comp.count > 0 ? (comp.total / comp.count) : 0;
+            });
+
+            return {
+                functionalScore: correctAnswers,
+                totalFunctional: functionalQuestions.length,
+                behavioralProfile: competencyData
+            };
+        }
+
+        function renderCharts(results) {
+            const { functionalScore, totalFunctional, behavioralProfile } = results;
+            const incorrectAnswers = totalFunctional - functionalScore;
+            
+            const competencyLabels = Object.keys(behavioralProfile);
+            const competencyData = Object.values(behavioralProfile);
+
+            if (functionalChartInstance) functionalChartInstance.destroy();
+            if (behavioralChartInstance) behavioralChartInstance.destroy();
+
+            const ctxFunctional = document.getElementById('functional-chart').getContext('2d');
+            functionalChartInstance = new Chart(ctxFunctional, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Correctas', 'Incorrectas'],
+                    datasets: [{
+                        data: [functionalScore, incorrectAnswers],
+                        backgroundColor: ['#14b8a6', '#f87171'],
+                        borderColor: ['#ffffff'],
+                        borderWidth: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '70%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            const ctxBehavioral = document.getElementById('behavioral-chart').getContext('2d');
+            behavioralChartInstance = new Chart(ctxBehavioral, {
+                type: 'radar',
+                data: {
+                    labels: competencyLabels,
+                    datasets: [{
+                        label: 'Tu Perfil',
+                        data: competencyData,
+                        backgroundColor: 'rgba(20, 184, 166, 0.2)',
+                        borderColor: '#0d9488',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#0d9488',
+                        pointBorderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                            grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                            pointLabels: { font: { size: 12 } },
+                            min: 0, max: 3,
+                            ticks: { stepSize: 1, display: false }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+        
+        function saveAttempt(results) {
+            const history = JSON.parse(localStorage.getItem('dianQuizHistory')) || [];
+            const attempt = {
+                date: new Date().toISOString(),
+                ...results,
+                userAnswers: appState.userAnswers
+            };
+            history.push(attempt);
+            localStorage.setItem('dianQuizHistory', JSON.stringify(history));
+        }
+
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('dianQuizHistory')) || [];
+            if (history.length > 0) {
+                historyList.innerHTML = history.map(attempt => {
+                    const date = new Date(attempt.date);
+                    const formattedDate = `${date.toLocaleDateString('es-CO')} - ${date.toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})}`;
+                    return `
+                        <div class="flex justify-between items-center bg-slate-100 p-3 rounded-lg">
+                            <span class="text-sm text-slate-600">${formattedDate}</span>
+                            <span class="font-bold text-teal-600">Funcional: ${attempt.functionalScore}/${attempt.totalFunctional}</span>
+                        </div>
+                    `;
+                }).join('');
+                historySection.classList.remove('hidden');
+            } else {
+                historySection.classList.add('hidden');
+            }
+        }
+
+        function clearHistory() {
+            localStorage.removeItem('dianQuizHistory');
+            loadHistory();
+        }
+
+        function toggleReview() {
+            if (reviewSection.classList.contains('hidden')) {
+                renderReview();
+                reviewSection.classList.remove('hidden');
+                reviewBtn.textContent = "Ocultar Revisión";
+            } else {
+                reviewSection.classList.add('hidden');
+                reviewBtn.textContent = "Revisar Respuestas";
+            }
+        }
+
+        function renderReview() {
+            const container = document.getElementById('review-container');
+            let content = '';
+            const functionalQuestions = questions.slice(0, 54);
+            functionalQuestions.forEach((q, index) => {
+                const userAnswerIndex = appState.userAnswers[index];
+                const isCorrect = userAnswerIndex === q.correct;
+                const userAnswerText = userAnswerIndex !== undefined ? q.options[userAnswerIndex] : 'No respondida';
+                
+                content += `
+                    <div class="p-4 rounded-lg ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+                        <p class="font-bold mb-2">${index + 1}. ${q.enunciado}</p>
+                        <p class="text-sm">Tu respuesta: <span class="${isCorrect ? 'text-green-700' : 'text-red-700'} font-semibold">${userAnswerText}</span></p>
+                        ${!isCorrect ? `
+                            <p class="text-sm">Respuesta correcta: <span class="text-green-700 font-semibold">${q.options[q.correct]}</span></p>
+                            <p class="text-xs mt-2 text-slate-600 bg-slate-100 p-2 rounded"><strong>Justificación:</strong> ${q.justification}</p>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            container.innerHTML = content;
+        }
+
+        startBtn.addEventListener('click', startQuiz);
+        nextBtn.addEventListener('click', handleNext);
+        restartBtn.addEventListener('click', () => {
+            resultsScreen.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+            loadHistory();
+        });
+        reviewBtn.addEventListener('click', toggleReview);
+        clearHistoryBtn.addEventListener('click', clearHistory);
+
+        // Initial Load
+        loadHistory();
+
+    </script>
+</body>
+</html>
